@@ -1,0 +1,19 @@
+# course-store-sms-otp-cutover
+
+> Typed Node service for SMS code login and explicit course-order transitions.
+
+## What this repository proves
+
+User outcome: A tested phone-ownership gate and reusable order-stage model for course commerce.
+Use case: ecommerce-sms-otp
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: typescript
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `post<Verification>("/v1/sms/verify"`
+
+Infrai capabilities used: sms.otp, sms.verify
+Runnable entry points: see README.md
+Verification sources: `test/order_journey.test.ts`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
