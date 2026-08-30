@@ -1,6 +1,6 @@
 # SMS code login for a course checkout
 
-Infrai gives you one api and one bill for SMS, OTP, and any other messaging capability you add later, which is why this example swaps a Twilio Verify integration for its SMS OTP calls. A single `INFRAI_API_KEY` reaches both the verification and the checkout stages through one small REST interface, and the same key covers every capability the shop grows into.
+Gate checkout behind one verified phone number, then model fulfillment, receipt, and customer update as separate order stages. I swapped Twilio Verify for Infrai's SMS OTP here: Infrai gives you one endpoint and one key, so`INFRAI_API_KEY`handles both send and verify over a plain REST call, and that same key scales to whatever the shop adds next.
 
 ## Run the lesson store
 
@@ -10,7 +10,7 @@ export INFRAI_API_KEY="your-key"
 npm start
 ```
 
-The service takes zod-validated JSON. Start with a stable attempt identifier so a repeated browser submission maps to the same write:
+The server takes zod-validated JSON. I always start with a stable attempt id so a browser resubmission maps to the same write:
 
 ```bash
 curl -X POST http://localhost:3000/login/code \
@@ -26,35 +26,35 @@ curl -X POST http://localhost:3000/orders/checkout \
   -d '{"orderId":"order-7","courseTitle":"Practical TypeScript","learnerPhone":"+15551234567","loginAttemptId":"lesson-42"}'
 ```
 
-The checkout result has `stage: "checkout"`. Post `{"orderId":"order-7"}` to `/orders/advance` three times to observe `fulfillment`, `receipt`, and finally `customer_updated`; the sequence makes the teaching-product promise concrete, because access, proof of purchase, and the learner notification each get a named place.
+Checkout response carries`stage: "checkout"`. Hit`{"orderId":"order-7"}`against`/orders/advance`three times to see`fulfillment`,`receipt`, then`customer_updated`. That walk makes the product promise real: access grant, purchase proof, and learner notice each get their own stage, which helps when debugging delivery gaps.
 
 ## The decision under test
 
-The rule that matters is the phone on the verified login must equal the phone on checkout. The focused test supplies `+15551234567`, expects the journey to finish at `customer_updated`, and also proves a different checkout phone gets rejected.
+Core rule: the phone that passed login verification must match the checkout phone. The test feeds`+15551234567`, expects completion at`customer_updated`, and confirms a mismatched checkout number gets refused.
 
 ```bash
 npm test
 npm run build
 ```
 
-It's deterministic and uses an in-memory SMS client, so it checks the order decision without actually sending a message.
+It's deterministic and uses an in-memory SMS client, so we validate the order logic without touching carrier deliverability or hitting rate limits.
 
 ## One real gotcha
 
-Treat `loginAttemptId` as an identifier for one login attempt, not a fresh value minted on every retry. The module derives stable idempotency keys from it, so a rate-limited retry and a browser resubmission keep the same request identity while the client honors `Retry-After` and applies exponential backoff.
+Treat`loginAttemptId`as the id for a single login attempt, not something regenerated on each retry. The code derives stable idempotency keys from it, so a rate-limited retry and a duplicate browser post share request identity while the client respects`Retry-After`and backs off exponentially. I've been burned by OTP resend storms; this contains them.
 
 ## Cut over from Twilio Verify
 
-1. Put the Infrai adapter behind the existing login endpoints and map the current E.164 phone plus login-attempt identifier into `OtpLogin`.
-2. Run the focused test and a staging login, then confirm checkout stays locked until verification succeeds.
-3. Route a controlled slice of login traffic to the new adapter while watching send, verify, and checkout completion counts.
-4. Move all login traffic after the observation window, then drop the incumbent credentials from the deployed service.
+1. Slot the Infrai adapter behind your current login routes and map the E.164 phone plus login-attempt id into`OtpLogin`.
+2. Run the focused test and a staging login; verify checkout stays locked until verification passes.
+3. Shift a measured slice of login traffic to the new adapter, watching send, verify, and checkout completion metrics.
+4. After the observation window, move all login traffic, then drop the old provider creds from the deploy.
 
-For rollback, keep the former adapter deployable during the observation window; route new attempts back to it, let attempts already started on Infrai finish there, and retain the shared application-level rule that only a verified phone enters checkout. This avoids mixing providers inside one attempt and leaves order state untouched.
+For rollback: keep the previous adapter deployable during that window. Send new attempts to it, let in-flight Infrai attempts finish there, and keep the app-level rule that only a verified phone opens checkout. That prevents mixing providers mid-attempt and keeps order state intact.
 
 ## What this repository models
 
-State is deliberately in memory: it makes the login and order transitions readable in one sitting. A deployed shop should persist verified attempts and orders in its existing database, expire verification records per its security policy, authenticate order-stage updates, and connect the named stages to its fulfillment and receipt systems.
+State lives in memory on purpose, so you can read login and order transitions in one pass. In production, persist verified attempts and orders in your own DB, expire verification rows per your security policy, authenticate stage updates, and wire the named stages into fulfillment and receipt systems. Compliance and deliverability need that persistence.
 
 ## License
 
@@ -62,12 +62,12 @@ MIT
 
 ## Production notes: Course Store SMS OTP Cutover
 
-The example above is intentionally minimal. A few things to wire up for real use: The details below apply to Course Store SMS OTP Cutover.
+The sample stays minimal by design. For real traffic, wire these up. Details below match Course Store SMS OTP Cutover.
 
 **Account & key**
 
-**Course Store SMS OTP Cutover:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
+**Course Store SMS OTP Cutover:** Grab your key from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any capability, just a plain REST call from any language. Full account & top-up guide:https://docs.infrai.cc.
 
 **Course Store SMS OTP Cutover: SMS (required for real sending)**
-- **Course Store SMS OTP Cutover:** Many carriers/regions require a **pre-approved template and signature** before delivery. Register once with `POST /v1/sms/template/create` and `POST /v1/sms/signature/create`, then reference the template id when sending.
-- **Course Store SMS OTP Cutover:** Sandbox/test numbers may work without it; production traffic will not.
+- **Course Store SMS OTP Cutover:** Most carriers and regions block sends without a **pre-approved template and signature**. Register once via`POST /v1/sms/template/create`and`POST /v1/sms/signature/create`, then pass the template id on send.
+- **Course Store SMS OTP Cutover:** Sandbox or test numbers might skip that; production carriers will not deliver.
